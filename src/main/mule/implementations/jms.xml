@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<file:config name="File_Config" doc:name="File Config" doc:id="808f20fa-c1a4-42af-8c41-5950b88640d6" >
+		<file:connection workingDir="C:\" />
+	</file:config>
+	<flow name="jmsFlow" doc:id="85c9e08b-2c59-40ee-ae53-638b1780496f" >
+		<http:listener doc:name="Listener" doc:id="49db610e-4932-43b4-8aed-96e342cbbc9a" config-ref="HTTP_Listener_config" path="${secure::http.listener.path}"/>
+		<http:request method="GET" doc:name="Request" doc:id="9cf48ec7-456e-4d2d-b6cf-5f4f3041a47b" url="https://dummy.restapiexample.com/api/v1/employees"/>
+		<logger level="INFO" doc:name="Logger" doc:id="67df204c-0b70-453d-915d-8264b75e1a07" message="#[payload]"/>
+		<flow-ref doc:name="Flow Reference" doc:id="1a2b4163-d4d4-4744-adcc-25359393ea3f" name="jmsFlow3" />
+		<logger level="INFO" doc:name="Logger" doc:id="c4928406-4d48-4bc2-a6d7-df164a0cb24d" message='"emp_data had published, consumed and write into SFTP sucessfully"'/>
+	</flow>
+	<flow name="jmsFlow1" doc:id="b111e7aa-c6e1-4302-b905-51f7d64ffb5c" initialState="stopped">
+		<jms:consume doc:name="Consume" doc:id="448ac7c6-2ae4-44b7-9132-9b7c0896eeef" config-ref="JMS_Config" destination="Q.JMS" contentType="application/json">
+			<jms:consumer-type >
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:consume>
+		<logger level="INFO" doc:name="Logger" doc:id="567bfa14-2cf6-463b-bd43-6a842e944729" message='"consumed emp_data is:" #[payload]'/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="30c72bd1-b78a-4567-81a3-4fc63189b23a" >
+			<route >
+				<file:write doc:name="Write" doc:id="00d1a49a-77f2-48a1-ad39-9c33e9cd17bd" config-ref="File_Config" path="Users\USER\Desktop\json\file\emp1.json"/>
+				<file:read doc:name="Read" doc:id="be05edd4-2306-4827-b42d-1473f1a73abc" config-ref="File_Config" path="Users\USER\Desktop\json\file\emp.json"/>
+				<logger level="INFO" doc:name="Logger" doc:id="047898bf-b192-4365-a8dd-4b9807f5aa25" message="#[payload]"/>
+			</route>
+			<route >
+				<sftp:write doc:name="Write" doc:id="dc3d3b9e-520d-46e8-b9ec-8f0fce12bd82" config-ref="SFTP_Config" path="/INBOUND/emp.json" />
+			</route>
+		</scatter-gather>
+	</flow>
+	<flow name="jmsFlow2" doc:id="716690e7-5812-4347-8966-a7c340d28dc3" initialState="started">
+		<jms:listener doc:name="On New Message" doc:id="20ea0cf7-f389-40fa-8009-b0f1f9765d34" config-ref="JMS_Config" destination="Q.JMS" inboundContentType="application/json" ackMode="AUTO">
+			<jms:consumer-type >
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:listener>
+		<ee:transform doc:name="Transform Message" doc:id="a5159a37-15cb-4c3e-ad4f-15cbd3daefa5" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<raise-error doc:name="Raise error" doc:id="27ce833c-8462-409b-9a00-b91a06dbd8f4" type="ANY" />
+		<logger level="INFO" doc:name="Logger" doc:id="3599b39e-c977-492f-8b00-f169407d31b8" message='"consumed sucessfully"'/>
+	</flow>
+	<flow name="jmsFlow3" doc:id="241e2cb2-a3ae-4ff9-bd44-3e15119011cf" >
+		<jms:publish-consume doc:name="Publish consume" doc:id="03a23662-c5a4-4338-91cb-76aac66e28d3" config-ref="JMS_Config" destination="Q.JMS">
+			<jms:publish-configuration persistentDelivery="true" />
+			<jms:consume-configuration inboundContentType="application/json" maximumWait="30" maximumWaitUnit="SECONDS"/>
+		</jms:publish-consume>
+		<logger level="INFO" doc:name="Logger" doc:id="b6383db0-af61-4ec5-a242-c2938fbee770" message='"emp_data published and consumed: " #[payload]' />
+		<ee:transform doc:name="Transform Message" doc:id="cba743ff-0c04-4568-904e-0989db5556c9" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<sftp:write doc:name="Write" doc:id="64b66068-aa3a-4ed0-a237-910db0b6b722" config-ref="SFTP_Config" path="\INBOUND\emp_data.json"/>
+	</flow>
+</mule>
